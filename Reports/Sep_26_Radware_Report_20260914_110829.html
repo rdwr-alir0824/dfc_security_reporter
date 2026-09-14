@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radware Attack Report - Weekly Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5; color: #2c3e50; line-height: 1.6;
+        }
+        .container {
+            max-width: 1400px; margin: 0 auto; background: #fff;
+            box-shadow: 0 4px 24px rgba(0,0,0,.12); border-radius: 10px; overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #003f7f 0%, #005bb5 60%, #0073e6 100%);
+            color: #fff; padding: 36px 40px 28px;
+        }
+        .header h1 { font-size: 28px; font-weight: 700; letter-spacing: .5px; }
+        .header .subtitle { margin-top: 8px; font-size: 14px; opacity: .85; }
+        .header .meta { margin-top: 14px; font-size: 12px; opacity: .7; display: flex; gap: 30px; flex-wrap: wrap; }
+        .header .meta span { display: flex; align-items: center; gap: 6px; }
+        .content { padding: 32px 40px; }
+        .section { margin-bottom: 40px; }
+        .section-title {
+            font-size: 18px; font-weight: 700; color: #003f7f;
+            border-left: 4px solid #0073e6; padding-left: 12px; margin-bottom: 18px;
+        }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px; margin-bottom: 8px;
+        }
+        .stat-card {
+            background: #f7f9fc; border: 1px solid #dde3ef; border-radius: 8px;
+            padding: 20px 18px; text-align: center; transition: box-shadow .2s;
+        }
+        .stat-card:hover { box-shadow: 0 4px 14px rgba(0,63,127,.12); }
+        .stat-value { font-size: 28px; font-weight: 800; color: #003f7f; line-height: 1.1; }
+        .stat-value.large-text { font-size: 18px; }
+        .stat-value.xlarge-text { font-size: 14px; word-break: break-all; }
+        .stat-label { font-size: 12px; color: #6c757d; margin-top: 6px; text-transform: uppercase; letter-spacing: .6px; }
+        .stat-sub { font-size: 11px; color: #999; margin-top: 3px; }
+        .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px; margin-bottom: 8px; }
+        .chart-box { background: #f7f9fc; border: 1px solid #dde3ef; border-radius: 8px; padding: 20px; }
+        .chart-title { font-size: 13px; font-weight: 600; color: #003f7f; margin-bottom: 14px; text-align: center; }
+        .chart-total { font-size: 12px; color: #555; text-align: center; margin: -4px 0 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead tr { background: #003f7f; color: #fff; }
+        thead th { padding: 11px 14px; text-align: left; font-weight: 600; white-space: nowrap; }
+        tbody tr.even { background: #f7f9fc; }
+        tbody tr.odd { background: #fff; }
+        tbody tr:hover { background: #e8f0fa; }
+        tbody td { padding: 10px 14px; border-bottom: 1px solid #e9ecef; vertical-align: top; }
+        .week-col { font-size: 12px; white-space: nowrap; }
+        .num-col { text-align: right; font-weight: 700; color: #003f7f; }
+        .ip-col { font-family: 'Consolas', monospace; font-size: 12px; }
+        .vector-col { font-size: 11px; color: #555; }
+        .badge {
+            display: inline-block; background: #0073e6; color: #fff;
+            border-radius: 10px; padding: 1px 7px; font-size: 11px;
+            margin-left: 6px; font-family: 'Segoe UI', sans-serif;
+        }
+        .sub { font-size: 11px; color: #888; }
+        .clickable {
+            cursor: pointer; border: 1px solid #b0c8ef !important;
+            transition: box-shadow .2s, transform .15s;
+        }
+        .clickable:hover { box-shadow: 0 6px 20px rgba(0,63,127,.20) !important; transform: translateY(-2px); }
+        .modal-backdrop {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.45); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-backdrop.open { display: flex; }
+        .modal {
+            background: #fff; border-radius: 10px; width: 520px; max-width: 95vw;
+            box-shadow: 0 16px 48px rgba(0,0,0,.28); overflow: hidden;
+        }
+        .modal-header {
+            background: linear-gradient(135deg, #003f7f, #0073e6);
+            color: #fff; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
+        }
+        .modal-header h3 { font-size: 15px; font-weight: 700; }
+        .modal-close {
+            background: none; border: none; color: #fff; font-size: 22px;
+            cursor: pointer; line-height: 1; padding: 0 4px;
+        }
+        .modal-body { padding: 20px 24px; }
+        .detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .detail-table td { padding: 7px 10px; border-bottom: 1px solid #eee; }
+        .detail-table td:first-child { color: #555; font-weight: 600; width: 38%; white-space: nowrap; }
+        .detail-table td:last-child { font-family: Consolas, monospace; color: #003f7f; word-break: break-word; }
+        .footer {
+            background: #f0f2f5; border-top: 1px solid #dde3ef;
+            padding: 16px 40px; font-size: 11px; color: #888;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Radware Attack Report - Weekly Analysis</h1>
+        <div class="subtitle">Comprehensive DDoS Attack Analysis &amp; Campaign Tracking</div>
+        <div class="meta">
+            <span>&#128197; Period: <strong>2026-09-01  →  2026-09-13</strong></span>
+            <span>&#128344; Generated: 2026-09-14 11:08:33</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <!-- Overview Section -->
+        <div class="section">
+            <div class="section-title">&#128202; Executive Overview</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">16244</div>
+                    <div class="stat-label">Total Attack Events</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">2</div>
+                    <div class="stat-label">Weekly Periods Analyzed</div>
+                </div>
+                <div class="stat-card clickable" onclick="showDetail('bw')" title="Click for details"><div class="stat-value large-text">35.53 Gbps</div><div class="stat-label">Peak Bandwidth</div><div class="stat-sub">&#128269; click for details</div></div>
+                <div class="stat-card clickable" onclick="showDetail('pps')" title="Click for details"><div class="stat-value large-text">3.63M pps</div><div class="stat-label">Peak PPS</div><div class="stat-sub">&#128269; click for details</div></div>
+                <div class="stat-card">
+                    <div class="stat-value xlarge-text">143.59.233.164</div>
+                    <div class="stat-label">Most Targeted IP</div>
+                    <div class="stat-sub">7 campaigns</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Period Trends Charts -->
+        <div class="section">
+            <div class="section-title">&#128200; Weekly Attack Trends</div>
+            <div class="chart-row">
+                <div class="chart-box">
+                    <div class="chart-title">Attack Events per Week</div>
+                    <canvas id="chartCount"></canvas>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">Max Peak Bandwidth per Week (Gbps)</div>
+                    <canvas id="chartBW"></canvas>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">Max Peak PPS per Week (K pps)</div>
+                    <canvas id="chartPPS"></canvas>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">Top DST IP Hit Count per Week</div>
+                    <canvas id="chartDST"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attack Type Distribution -->
+        <div class="section">
+            <div class="section-title">&#128737; Attack Analysis</div>
+            <div class="chart-row">
+                <div class="chart-box">
+                    <div class="chart-title">Top Attack Vectors</div>
+                    <canvas id="chartVectors"></canvas>
+                </div>
+                <div class="chart-box">
+                    <div class="chart-title">DefenseFlow Activation Count</div>
+                    <div class="chart-total"><strong>Total Activations:</strong> 615</div>
+                    <canvas id="chartDetectorActivations"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top 10 Attacks -->
+        <div class="section">
+            <div class="section-title">&#128293; Top 10 Attacks by Bandwidth</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Target IP</th>
+                            <th>Start Time</th>
+                            <th>Duration</th>
+                            <th>Peak BW</th>
+                            <th>Peak PPS</th>
+                            <th>Attack Vectors</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+<tr class="even"><td class="ip-col">24.214.52.223</td><td>2026-09-13 16:47</td><td>2 min</td><td>35.53 Gbps</td><td>3.63M pps</td><td class="vector-col">DOSS-DNS-Q-Malformed-FLAGS; DOSS-DNS-Q-Malformed-N...</td></tr>
+<tr class="odd"><td class="ip-col">24.214.81.117</td><td>2026-09-06 12:20</td><td>5 min</td><td>4.54 Gbps</td><td>413K pps</td><td class="vector-col">DOSS-DNS-Ref-L4-Above-3000; DOSS-UDP-flood-80-Req;...</td></tr>
+<tr class="even"><td class="ip-col">24.96.206.243</td><td>2026-09-06 22:29</td><td>3 min</td><td>4.28 Gbps</td><td>405K pps</td><td class="vector-col">DDoS-UDP-MEMCACHED-AMP; DOSS-DNS-Ref-Above_30_Answ...</td></tr>
+<tr class="odd"><td class="ip-col">96.27.242.196</td><td>2026-09-08 03:56</td><td>1h 12m</td><td>3.85 Gbps</td><td>330K pps</td><td class="vector-col">Memcached-Server-Reflect; network flood IPv4 UDP...</td></tr>
+<tr class="even"><td class="ip-col">24.192.82.192</td><td>2026-09-11 02:49</td><td>32 min</td><td>3.64 Gbps</td><td>332K pps</td><td class="vector-col">DOSS-DNS-Ref-L4-Above-3000; DOSS-UDP-flood-80-Req;...</td></tr>
+<tr class="odd"><td class="ip-col">24.96.86.82</td><td>2026-09-06 12:29</td><td>2 min</td><td>2.26 Gbps</td><td>206K pps</td><td class="vector-col">DOSS-DNS-Ref-L4-Above-3000; DOSS-UDP-flood-80-Req;...</td></tr>
+<tr class="even"><td class="ip-col">24.192.89.64</td><td>2026-09-13 10:00</td><td>1 min</td><td>1.92 Gbps</td><td>196K pps</td><td class="vector-col">network flood IPv4 UDP...</td></tr>
+<tr class="odd"><td class="ip-col">24.192.89.64</td><td>2026-09-13 09:44</td><td>3 min</td><td>1.70 Gbps</td><td>174K pps</td><td class="vector-col">network flood IPv4 UDP...</td></tr>
+<tr class="even"><td class="ip-col">67.149.138.48</td><td>2026-09-05 17:14</td><td>2 min</td><td>568.36 Mbps</td><td>1.01M pps</td><td class="vector-col">DOSS-DNS-Q-Malformed-FLAGS; DOSS-DNS-Q-Malformed-N...</td></tr>
+<tr class="odd"><td class="ip-col">69.73.124.64</td><td>2026-09-09 23:13</td><td>1 min</td><td>393.45 Mbps</td><td>57K pps</td><td class="vector-col">network flood IPv4 UDP...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Period Detail -->
+        <div class="section">
+            <div class="section-title">&#128197; Weekly Summary</div>
+            <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Week</th>
+                            <th style="text-align:right">Events</th>
+                            <th>Max Peak BW</th>
+                            <th>Max Peak PPS</th>
+                            <th>Top DST IP (count)</th>
+                            <th>Longest Attack</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+<tr class="even"><td class="week-col"><strong>Sep Wk1  Sep 01–Sep 06</strong></td><td class="num-col">4039</td><td>4.54 Gbps</td><td>1.01M pps</td><td class="ip-col">143.59.233.164<span class="badge">7x</span></td><td class="ip-col">23.28.115.101<br><span class="sub">4h 13m &middot; 2026-09-03 01:16:23</span></td></tr>
+<tr class="odd"><td class="week-col"><strong>Sep Wk2  Sep 07–Sep 13</strong></td><td class="num-col">12205</td><td>35.53 Gbps</td><td>3.63M pps</td><td class="ip-col">143.59.232.99<span class="badge">7x</span></td><td class="ip-col">50.4.10.129<br><span class="sub">8h 35m &middot; 2026-09-12 03:59:38</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <span>Radware Attack Report - Weekly Analysis &mdash; Generated 2026-09-14 11:08:33</span>
+    </div>
+</div>
+
+<!-- Modal for Attack Details -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="hideModal(event)">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modalTitle">Attack Detail</h3>
+            <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <table class="detail-table" id="modalTable"></table>
+        </div>
+    </div>
+</div>
+
+<script>
+const LABELS = ["Sep Wk1  Sep 01–Sep 06", "Sep Wk2  Sep 07–Sep 13"];
+const COUNTS = [4039, 12205];
+const BW_GBPS = [4.54, 35.53];
+const PPS_K = [1009.61, 3626.92];
+const DST_CNT = [7, 7];
+const DST_IPS = ["143.59.233.164", "143.59.232.99"];
+const BW_DETAIL = {"Target IP": "24.214.52.223", "Protocols": "UDP", "Peak Bandwidth": "35.53 Gbps", "Peak PPS": "3.63M pps", "Attack Start": "2026-09-13 16:47:36", "Attack End": "2026-09-13 16:49:28", "Duration": "2 min", "Vectors": "DOSS-DNS-Q-Malformed-FLAGS; DOSS-DNS-Q-Malformed-NS-AR; DOSS-DNS-Q-Malformed-QD-AN; DOSS-DNS-Q-Malformed-QUERY; DOSS-DNS-R-Malformed-QD-2; network flood IPv4 UDP", "Policy": "WOW-RESIDENTAL-1_1@009609-00003-0", "Devices": "10.21.112.34, 10.21.58.210, 10.98.221.234"};
+const PPS_DETAIL = {"Target IP": "24.214.52.223", "Protocols": "UDP", "Peak Bandwidth": "35.53 Gbps", "Peak PPS": "3.63M pps", "Attack Start": "2026-09-13 16:47:36", "Attack End": "2026-09-13 16:49:28", "Duration": "2 min", "Vectors": "DOSS-DNS-Q-Malformed-FLAGS; DOSS-DNS-Q-Malformed-NS-AR; DOSS-DNS-Q-Malformed-QD-AN; DOSS-DNS-Q-Malformed-QUERY; DOSS-DNS-R-Malformed-QD-2; network flood IPv4 UDP", "Policy": "WOW-RESIDENTAL-1_1@009609-00003-0", "Devices": "10.21.112.34, 10.21.58.210, 10.98.221.234"};
+const VECTOR_LABELS = ["network flood IPv4 UDP", "Memcached-Server-Reflect", "network flood IPv4 UDP-FRAG", "DOSS-UDP-flood-80-Req", "DOSS-DNS-Ref-L4-Above-3000", "DOSS-NTP-reflected-monlist", "DOSS-DNS-Q-Malformed-QD-AN", "DOSS-DNS-Q-Malformed-QUERY"];
+const VECTOR_VALUES = [109, 41, 10, 9, 5, 3, 2, 2];
+const DETECTOR_DATES = ["Sep 01", "Sep 02", "Sep 03", "Sep 04", "Sep 05", "Sep 06", "Sep 07", "Sep 08", "Sep 09", "Sep 10", "Sep 11", "Sep 12", "Sep 13"];
+const DETECTOR_COUNTS = [55, 48, 40, 58, 56, 50, 57, 41, 23, 32, 43, 48, 64];
+
+function showDetail(type) {
+    const detail = type === 'bw' ? BW_DETAIL : PPS_DETAIL;
+    const title = type === 'bw' ? '&#9889; Peak Bandwidth Attack Detail' : '&#128246; Peak PPS Attack Detail';
+    document.getElementById('modalTitle').innerHTML = title;
+    const tbl = document.getElementById('modalTable');
+    tbl.innerHTML = Object.entries(detail)
+        .map(([k, v]) => `<tr><td>${k}</td><td>${v || '—'}</td></tr>`)
+        .join('');
+    document.getElementById('modalBackdrop').classList.add('open');
+}
+function closeModal() { document.getElementById('modalBackdrop').classList.remove('open'); }
+function hideModal(e) { if (e.target === document.getElementById('modalBackdrop')) closeModal(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+const BLUE_PALETTE = [
+    'rgba(0,63,127,0.78)', 'rgba(0,115,230,0.78)',
+    'rgba(0,163,224,0.78)', 'rgba(0,191,255,0.78)',
+    'rgba(0,214,198,0.78)', 'rgba(0,230,160,0.78)',
+];
+function barColor(n) { return Array.from({length: n}, (_, i) => BLUE_PALETTE[i % BLUE_PALETTE.length]); }
+
+const commonOpts = {
+    responsive: true,
+    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+    scales: {
+        x: { ticks: { font: { size: 11 }, maxRotation: 35 }, grid: { color: 'rgba(0,0,0,.05)' } },
+        y: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+    },
+};
+
+// Period trend charts
+new Chart(document.getElementById('chartCount'), {
+    type: 'bar',
+    data: { labels: LABELS, datasets: [{ label: 'Events', data: COUNTS, backgroundColor: barColor(LABELS.length), borderRadius: 5 }] },
+    options: commonOpts,
+});
+
+new Chart(document.getElementById('chartBW'), {
+    type: 'bar',
+    data: { labels: LABELS, datasets: [{ label: 'Gbps', data: BW_GBPS, backgroundColor: barColor(LABELS.length), borderRadius: 5 }] },
+    options: { ...commonOpts, scales: { ...commonOpts.scales, y: { ...commonOpts.scales.y, ticks: { ...commonOpts.scales.y.ticks, callback: v => v.toFixed(2) + ' G' } } } },
+});
+
+new Chart(document.getElementById('chartPPS'), {
+    type: 'bar',
+    data: { labels: LABELS, datasets: [{ label: 'K pps', data: PPS_K, backgroundColor: barColor(LABELS.length), borderRadius: 5 }] },
+    options: { ...commonOpts, scales: { ...commonOpts.scales, y: { ...commonOpts.scales.y, ticks: { ...commonOpts.scales.y.ticks, callback: v => v.toFixed(0) + 'K' } } } },
+});
+
+new Chart(document.getElementById('chartDST'), {
+    type: 'bar',
+    data: { labels: DST_IPS, datasets: [{ label: 'Attacks on top DST IP', data: DST_CNT, backgroundColor: barColor(LABELS.length), borderRadius: 5 }] },
+    options: {
+        ...commonOpts,
+        plugins: { ...commonOpts.plugins, tooltip: { callbacks: {
+            title: items => DST_IPS[items[0].dataIndex],
+            beforeLabel: ctx => 'Week: ' + LABELS[ctx.dataIndex],
+            label: ctx => 'Hit count: ' + ctx.parsed.y,
+        } } },
+        scales: { ...commonOpts.scales,
+            x: { ...commonOpts.scales.x, ticks: { font: { size: 11 }, maxRotation: 35 } },
+            y: { ...commonOpts.scales.y, ticks: { ...commonOpts.scales.y.ticks, callback: v => Number.isInteger(v) ? v : '' } },
+        },
+    },
+});
+
+// Attack vectors pie chart
+new Chart(document.getElementById('chartVectors'), {
+    type: 'doughnut',
+    data: {
+        labels: VECTOR_LABELS,
+        datasets: [{
+            data: VECTOR_VALUES,
+            backgroundColor: [
+                'rgba(0,63,127,0.8)', 'rgba(0,115,230,0.8)',
+                'rgba(0,163,224,0.8)', 'rgba(0,191,255,0.8)',
+                'rgba(0,214,198,0.8)', 'rgba(0,230,160,0.8)',
+                'rgba(100,140,180,0.8)', 'rgba(50,90,150,0.8)'
+            ],
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'right', labels: { font: { size: 11 }, padding: 10 } },
+            tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + ' attacks' } }
+        }
+    }
+});
+
+// External-detector activation bar chart
+new Chart(document.getElementById('chartDetectorActivations'), {
+    type: 'bar',
+    data: {
+        labels: DETECTOR_DATES,
+        datasets: [{
+            label: 'Kentik Activations',
+            data: DETECTOR_COUNTS,
+            backgroundColor: 'rgba(0,115,230,0.78)',
+            borderColor: 'rgba(0,115,230,1)',
+            borderWidth: 1,
+            borderRadius: 5
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: { 
+                mode: 'index', 
+                intersect: false,
+                callbacks: {
+                    label: ctx => 'Activations: ' + ctx.parsed.y
+                }
+            }
+        },
+        scales: {
+            x: { 
+                ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 45 }, 
+                grid: { color: 'rgba(0,0,0,.05)' } 
+            },
+            y: { 
+                beginAtZero: true, 
+                ticks: { 
+                    font: { size: 11 },
+                    callback: v => Number.isInteger(v) ? v : ''
+                }, 
+                grid: { color: 'rgba(0,0,0,.05)' },
+                title: {
+                    display: true,
+                    text: 'Count',
+                    font: { size: 12 }
+                }
+            }
+        }
+    }
+});
+</script>
+</body>
+</html>
